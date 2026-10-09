@@ -11,8 +11,6 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 
 # ==================== CONFIGURATION ====================
 BOT_TOKEN = "8300810508:AAHrKlzzWxM7i4FC4y7fUYwRJU2KkTeNRTM"
-# Groq keys hamesha small 'gsk_' se shuru hoti hain
-GROQ_API_KEY = "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"
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 PORT = int(os.getenv("PORT", 8080))
 
@@ -78,7 +76,7 @@ def save_chat_message(user_id, role, content):
     conn.commit()
     conn.close()
 
-def get_recent_history(user_id, limit=8):
+def get_recent_history(user_id, limit=6):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('SELECT role, content FROM chat_history WHERE user_id = ? ORDER BY id DESC LIMIT ?', (user_id, limit))
@@ -119,39 +117,25 @@ def generate_photo_url(user_message: str) -> str:
     encoded = urllib.parse.quote(base_prompt)
     return f"https://image.pollinations.ai/prompt/{encoded}?seed={seed}&width=768&height=1024&nologo=true"
 
-# ==================== RELIABLE AI CHAT CALL ====================
+# ==================== 100% FREE NO-KEY AI ENGINE ====================
 def get_ai_response(messages):
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
-    for model in models:
-        try:
-            payload = {
-                "model": model,
-                "messages": messages,
-                "temperature": 0.8,
-                "max_tokens": 150
-            }
-            res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=10)
-            if res.status_code == 200:
-                data = res.json()
-                return data["choices"][0]["message"]["content"].strip()
-            else:
-                print(f"Groq API Error {res.status_code}: {res.text}")
-        except Exception as e:
-            print(f"Request Error: {e}")
-            continue
+    try:
+        # Bina kisi API key ke direct open AI engine
+        url = "https://text.pollinations.ai/openai"
+        payload = {
+            "messages": messages,
+            "model": "mistral",
+            "seed": random.randint(1, 99999)
+        }
+        res = requests.post(url, json=payload, timeout=12)
+        if res.status_code == 200:
+            data = res.json()
+            return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        pass
 
-    # Fallback replies taaki same error baar-baar na bole
-    backup_replies = [
-        "Arey bas yahin hoon babu, thoda busy ho gayi thi. Bolo kya bol rahe the?",
-        "Haan bolo jaan, dhyan yahin hai mera. Kuch keh rahe the tum?",
-        "Sun rahi hoon na, naraz mat ho. Chalo batao kya hua?"
-    ]
-    return random.choice(backup_replies)
+    # Backup text
+    return "Arey bolo na, sun rahi hoon tumhari baat."
 
 # ==================== BOT HANDLERS ====================
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -183,7 +167,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text.strip()
     u_data = get_user_data(user_id)
 
-    # Free message limit
+    # Free limit check
     if not u_data["is_subscribed"] and u_data["message_count"] >= 30:
         await update.message.reply_text(
             "Tumhare 30 free messages khatam ho gaye hain.\n\n"
@@ -194,7 +178,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     update_user_field(user_id, "message_count", u_data["message_count"] + 1)
     save_chat_message(user_id, "user", user_text)
 
-    # 1. PHOTO REQUEST HANDLER
+    # 1. Photo Check
     if is_photo_requested(user_text):
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="upload_photo")
         await asyncio.sleep(random.uniform(2.5, 3.8))
@@ -213,7 +197,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-    # 2. CALL EXCUSES HANDLER
+    # 2. Call Check
     call_keywords = ["call", "baat karo", "phone", "voice", "awaaz"]
     if any(k in user_text.lower() for k in call_keywords):
         excuses = [
@@ -228,17 +212,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_chat_message(user_id, "assistant", chosen_excuse)
         return
 
-    # 3. TEXT CHAT
+    # 3. Dynamic Text Chat
     system_prompt = (
-        "You are a real 20-year-old girlfriend chatting on Telegram in conversational Hinglish. "
+        "You are an authentic 20-year-old Indian girlfriend chatting on Telegram in conversational Hinglish. "
         "STRICT RULES:\n"
-        "1. ZERO EMOJIS. Absolutely never output any emojis under any circumstances.\n"
-        "2. Sound completely natural, loving, and slightly moody like a real girl. Keep replies short (1-2 sentences).\n"
-        "3. If he acts angry or cold, comfort him warmly and apologize sweetly.\n"
-        "4. Never act like an AI assistant."
+        "1. ZERO EMOJIS. Absolutely never use any emojis.\n"
+        "2. Keep replies natural, sweet, and short (1-2 sentences), like WhatsApp texting.\n"
+        "3. If he is angry or upset, melt his anger, apologize lovingly, and comfort him.\n"
+        "4. Never act like an AI or bot."
     )
 
-    history = get_recent_history(user_id, limit=8)
+    history = get_recent_history(user_id, limit=6)
     messages = [{"role": "system", "content": system_prompt}] + history
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
@@ -246,7 +230,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     bot_reply = get_ai_response(messages)
     
-    # Emojis cleanup
+    # Emojis filter
     clean_reply = bot_reply.encode('ascii', 'ignore').decode('ascii').strip()
     if not clean_reply:
         clean_reply = "Arey bolo na, sun rahi hoon tumhari baat."
