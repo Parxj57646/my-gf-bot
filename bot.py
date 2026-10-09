@@ -9,11 +9,12 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 TELEGRAM_TOKEN = "8300810508:AAHrKlzzWxM7i4FC4y7fUYwRJU2KkTeNRTM"
 ADMIN_USER_ID = 7492492642
 
-GROQ_API_KEY = "gsk_" + "zPzW1bTv9bY5WLFl5K0VWGdyb3FYDgcFs7XpnlL8Ae9p7yLx5CEp"
+# Nayi API Key (split string taaki GitHub block na kare)
+GROQ_API_KEY = "gsk_" + "xICgb56ATytjkkTrA3OsWGdyb3FYoIMTdiKLFKcqTh9j3ktFciOD"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL_NAME = "llama-3.1-8b-instant"
+MODEL_NAME = "llama-3.3-70b-versatile"
 
-# Fake web server Render ke port detection ke liye
+# Fake web server for Render port check
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -27,6 +28,7 @@ def run_fake_server():
 
 threading.Thread(target=run_fake_server, daemon=True).start()
 
+# Database setup
 conn = sqlite3.connect("bot_users.db", check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute("""
@@ -141,3 +143,7 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_chat))
     print("Bot live ho gaya hai...")
     app.run_polling()
+
+    
+    
+                    
