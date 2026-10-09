@@ -117,25 +117,43 @@ def generate_photo_url(user_message: str) -> str:
     encoded = urllib.parse.quote(base_prompt)
     return f"https://image.pollinations.ai/prompt/{encoded}?seed={seed}&width=768&height=1024&nologo=true"
 
-# ==================== 100% FREE NO-KEY AI ENGINE ====================
-def get_ai_response(messages):
+# ==================== GUARANTEED FREE AI TEXT CHAT ====================
+def get_ai_reply(prompt_text):
+    # Method 1: Direct text pollinations get call with text clean
     try:
-        # Bina kisi API key ke direct open AI engine
-        url = "https://text.pollinations.ai/openai"
-        payload = {
-            "messages": messages,
-            "model": "mistral",
-            "seed": random.randint(1, 99999)
-        }
-        res = requests.post(url, json=payload, timeout=12)
-        if res.status_code == 200:
-            data = res.json()
-            return data["choices"][0]["message"]["content"].strip()
+        clean_prompt = urllib.parse.quote(prompt_text)
+        url = f"https://text.pollinations.ai/{clean_prompt}?model=openai&seed={random.randint(1,9999)}"
+        r = requests.get(url, timeout=12)
+        if r.status_code == 200 and len(r.text.strip()) > 0:
+            res = r.text.strip()
+            # Clean emojis
+            return res.encode('ascii', 'ignore').decode('ascii').strip()
     except Exception:
         pass
 
-    # Backup text
-    return "Arey bolo na, sun rahi hoon tumhari baat."
+    # Method 2: Backup fast AI engine
+    try:
+        url = "https://text.pollinations.ai/"
+        payload = {
+            "messages": [
+                {"role": "system", "content": "You are an Indian girlfriend chatting in Hinglish. ZERO EMOJIS allowed. Reply short 1-2 lines only."},
+                {"role": "user", "content": prompt_text}
+            ],
+            "model": "mistral"
+        }
+        r = requests.post(url, json=payload, timeout=12)
+        if r.status_code == 200:
+            res = r.text.strip()
+            return res.encode('ascii', 'ignore').decode('ascii').strip()
+    except Exception:
+        pass
+
+    variations = [
+        "Arey bolo na jaan, main dhyan se sun rahi hu.",
+        "Kahan kho gaye the? Main kabse tumhara wait kar rahi thi.",
+        "Haan bolo, gussa mat ho na ab, batao kya baat hai?"
+    ]
+    return random.choice(variations)
 
 # ==================== BOT HANDLERS ====================
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -167,7 +185,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text.strip()
     u_data = get_user_data(user_id)
 
-    # Free limit check
+    # 30 Messages Limit Check
     if not u_data["is_subscribed"] and u_data["message_count"] >= 30:
         await update.message.reply_text(
             "Tumhare 30 free messages khatam ho gaye hain.\n\n"
@@ -178,16 +196,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     update_user_field(user_id, "message_count", u_data["message_count"] + 1)
     save_chat_message(user_id, "user", user_text)
 
-    # 1. Photo Check
+    # 1. PHOTO REQUEST
     if is_photo_requested(user_text):
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="upload_photo")
-        await asyncio.sleep(random.uniform(2.5, 3.8))
+        await asyncio.sleep(random.uniform(2.0, 3.5))
         
         photo_url = generate_photo_url(user_text)
         captions = [
             "Lo, abhi li hai sirf tumhare liye. Kaisi lag rahi hu?",
             "Ye lo, khush? Ab sach sach batana kaisi lagi.",
-            "Bas tumhare liye ek candid click ki abhi. Kaisi hai?"
+            "Bas tumhare liye ek photo click ki abhi. Kaisi hai?"
         ]
         caption = random.choice(captions)
         try:
@@ -197,7 +215,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-    # 2. Call Check
+    # 2. CALL EXCUSES
     call_keywords = ["call", "baat karo", "phone", "voice", "awaaz"]
     if any(k in user_text.lower() for k in call_keywords):
         excuses = [
@@ -212,39 +230,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_chat_message(user_id, "assistant", chosen_excuse)
         return
 
-    # 3. Dynamic Text Chat
-    system_prompt = (
+    # 3. TEXT CHAT
+    full_prompt = (
         "You are an authentic 20-year-old Indian girlfriend chatting on Telegram in conversational Hinglish. "
-        "STRICT RULES:\n"
-        "1. ZERO EMOJIS. Absolutely never use any emojis.\n"
-        "2. Keep replies natural, sweet, and short (1-2 sentences), like WhatsApp texting.\n"
-        "3. If he is angry or upset, melt his anger, apologize lovingly, and comfort him.\n"
-        "4. Never act like an AI or bot."
+        "STRICT INSTRUCTIONS: ZERO EMOJIS allowed. Reply short in 1 or 2 sweet, realistic sentences. "
+        "Do not repeat robot lines. Be natural and loving. "
+        f"User said: {user_text}"
     )
-
-    history = get_recent_history(user_id, limit=6)
-    messages = [{"role": "system", "content": system_prompt}] + history
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     await asyncio.sleep(random.uniform(1.5, 2.5))
 
-    bot_reply = get_ai_response(messages)
-    
-    # Emojis filter
-    clean_reply = bot_reply.encode('ascii', 'ignore').decode('ascii').strip()
-    if not clean_reply:
-        clean_reply = "Arey bolo na, sun rahi hoon tumhari baat."
+    reply = get_ai_reply(full_prompt)
+    if not reply or len(reply.strip()) < 2:
+        reply = "Arey bolo na jaan, main dhyan se sun rahi hu."
 
-    save_chat_message(user_id, "assistant", clean_reply)
-    await update.message.reply_text(clean_reply)
+    save_chat_message(user_id, "assistant", reply)
+    await update.message.reply_text(reply)
 
-# ==================== WEB SERVER (RENDER KEEP-ALIVE) ====================
+# ==================== KEEP-ALIVE SERVER ====================
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"Bot is alive and running 24/7!")
+        self.wfile.write(b"Bot is alive!")
 
     def log_message(self, format, *args):
         return
@@ -257,7 +267,6 @@ def run_health_server():
 def main():
     t = threading.Thread(target=run_health_server, daemon=True)
     t.start()
-    print(f"Health server running on port {PORT}")
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start_handler))
