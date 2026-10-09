@@ -12,7 +12,7 @@ ADMIN_USER_ID = 7492492642
 # Groq API Configuration
 GROQ_API_KEY = "gsk_" + "xICgb56ATytjkkTrA3OsWGdyb3FYoIMTdiKLFKcqTh9j3ktFciOD"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL_NAME = "llama3-8b-8192"
+MODEL_NAME = "gemma2-9b-it"
 
 # Fake web server for Render port detection
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -143,3 +143,5 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_chat))
     print("Bot live ho gaya hai...")
     app.run_polling()
+
+
