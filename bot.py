@@ -5,17 +5,16 @@ import sqlite3
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
+import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
-from groq import Groq
 
 # ==================== CONFIGURATION ====================
 BOT_TOKEN = "8300810508:AAHrKlzzWxM7i4FC4y7fUYwRJU2KkTeNRTM"
-GROQ_API_KEY = "Gsk_GJlZ06wqaAusuosXlYDvWGdyb3FY8JeoSaXjIIocVSJXidYzPttY"
+# Groq keys hamesha small 'gsk_' se shuru hoti hain
+GROQ_API_KEY = "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"
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 PORT = int(os.getenv("PORT", 8080))
-
-groq_client = Groq(api_key=GROQ_API_KEY)
 
 # ==================== DATABASE SETUP ====================
 DB_FILE = "bot_users.db"
@@ -79,7 +78,7 @@ def save_chat_message(user_id, role, content):
     conn.commit()
     conn.close()
 
-def get_recent_history(user_id, limit=12):
+def get_recent_history(user_id, limit=8):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute('SELECT role, content FROM chat_history WHERE user_id = ? ORDER BY id DESC LIMIT ?', (user_id, limit))
@@ -120,21 +119,39 @@ def generate_photo_url(user_message: str) -> str:
     encoded = urllib.parse.quote(base_prompt)
     return f"https://image.pollinations.ai/prompt/{encoded}?seed={seed}&width=768&height=1024&nologo=true"
 
-# ==================== GROQ AI CALL ====================
-def get_groq_response(messages):
+# ==================== RELIABLE AI CHAT CALL ====================
+def get_ai_response(messages):
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
     models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     for model in models:
         try:
-            res = groq_client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=0.75,
-                max_tokens=250
-            )
-            return res.choices[0].message.content.strip()
-        except Exception:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": 0.8,
+                "max_tokens": 150
+            }
+            res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                return data["choices"][0]["message"]["content"].strip()
+            else:
+                print(f"Groq API Error {res.status_code}: {res.text}")
+        except Exception as e:
+            print(f"Request Error: {e}")
             continue
-    return "Thoda net issue ho gaya tha, bolo ab sun rahi hu."
+
+    # Fallback replies taaki same error baar-baar na bole
+    backup_replies = [
+        "Arey bas yahin hoon babu, thoda busy ho gayi thi. Bolo kya bol rahe the?",
+        "Haan bolo jaan, dhyan yahin hai mera. Kuch keh rahe the tum?",
+        "Sun rahi hoon na, naraz mat ho. Chalo batao kya hua?"
+    ]
+    return random.choice(backup_replies)
 
 # ==================== BOT HANDLERS ====================
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -180,7 +197,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. PHOTO REQUEST HANDLER
     if is_photo_requested(user_text):
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="upload_photo")
-        await asyncio.sleep(random.uniform(2.5, 4.0))
+        await asyncio.sleep(random.uniform(2.5, 3.8))
         
         photo_url = generate_photo_url(user_text)
         captions = [
@@ -206,35 +223,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         chosen_excuse = random.choice(excuses)
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        await asyncio.sleep(random.uniform(2.0, 3.2))
+        await asyncio.sleep(2.0)
         await update.message.reply_text(chosen_excuse)
         save_chat_message(user_id, "assistant", chosen_excuse)
         return
 
-    # 3. TEXT CHAT VIA GROQ
+    # 3. TEXT CHAT
     system_prompt = (
-        "You are a real 20-year-old girlfriend chatting on Telegram in Hinglish. "
+        "You are a real 20-year-old girlfriend chatting on Telegram in conversational Hinglish. "
         "STRICT RULES:\n"
         "1. ZERO EMOJIS. Absolutely never output any emojis under any circumstances.\n"
-        "2. Sound completely natural, loving, and slightly moody like a real girl. Keep replies short (1-3 sentences).\n"
-        "3. If he acts cold or late, show gentle attitude and melt when comforted.\n"
-        "4. If he talks about other girls, show slight cute jealousy.\n"
-        "5. Never act like an AI assistant. Never say 'How can I assist you'."
+        "2. Sound completely natural, loving, and slightly moody like a real girl. Keep replies short (1-2 sentences).\n"
+        "3. If he acts angry or cold, comfort him warmly and apologize sweetly.\n"
+        "4. Never act like an AI assistant."
     )
 
-    history = get_recent_history(user_id, limit=10)
+    history = get_recent_history(user_id, limit=8)
     messages = [{"role": "system", "content": system_prompt}] + history
 
-    delay = min(max(len(user_text) * 0.05, 1.8), 4.2)
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-    await asyncio.sleep(delay)
+    await asyncio.sleep(random.uniform(1.5, 2.5))
 
-    bot_reply = get_groq_response(messages)
+    bot_reply = get_ai_response(messages)
     
-    # Emojis filter
+    # Emojis cleanup
     clean_reply = bot_reply.encode('ascii', 'ignore').decode('ascii').strip()
     if not clean_reply:
-        clean_reply = "Hmm, bolo na, kahan kho gaye?"
+        clean_reply = "Arey bolo na, sun rahi hoon tumhari baat."
 
     save_chat_message(user_id, "assistant", clean_reply)
     await update.message.reply_text(clean_reply)
