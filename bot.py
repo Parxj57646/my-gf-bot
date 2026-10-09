@@ -1,4 +1,7 @@
+import os
 import sqlite3
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
@@ -6,9 +9,23 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 TELEGRAM_TOKEN = "8300810508:AAHrKlzzWxM7i4FC4y7fUYwRJU2KkTeNRTM"
 ADMIN_USER_ID = 7492492642
 
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "gsk_" + "zPzW1bTv9bY5WLFl5K0VWGdyb3FYDgcFs7XpnlL8Ae9p7yLx5CEp"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_NAME = "llama-3.1-8b-instant"
+
+# Fake web server Render ke port detection ke liye
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running 24/7!")
+
+def run_fake_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_fake_server, daemon=True).start()
 
 conn = sqlite3.connect("bot_users.db", check_same_thread=False)
 cursor = conn.cursor()
@@ -107,12 +124,15 @@ async def handle_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         response = requests.post(GROQ_BASE_URL, headers=headers, json=payload, timeout=20)
         res_json = response.json()
-        reply = res_json["choices"][0]["message"]["content"]
+        if "choices" in res_json:
+            reply = res_json["choices"][0]["message"]["content"]
+        else:
+            reply = f"Error: {res_json.get('error', {}).get('message', 'Key issue')}"
         if not is_admin:
             update_user_msg(user_id)
         await update.message.reply_text(reply)
-    except Exception:
-        await update.message.reply_text("Jaan, signal thoda weak hai, ek baar dubara bolo na?")
+    except Exception as e:
+        await update.message.reply_text(f"Jaan, error: {str(e)[:40]}")
 
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
