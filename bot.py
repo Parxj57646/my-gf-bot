@@ -9,12 +9,31 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 TELEGRAM_TOKEN = "8300810508:AAHrKlzzWxM7i4FC4y7fUYwRJU2KkTeNRTM"
 ADMIN_USER_ID = 7492492642
 
-# Groq API Configuration
 GROQ_API_KEY = "gsk_" + "xICgb56ATytjkkTrA3OsWGdyb3FYoIMTdiKLFKcqTh9j3ktFciOD"
-GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL_NAME = "gemma2-9b-it"
+GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODELS_URL = "https://api.groq.com/openai/v1/models"
 
-# Fake web server for Render port detection
+# Active model fetcher taaki model decommission error na aaye
+def get_working_groq_model():
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    try:
+        res = requests.get(GROQ_MODELS_URL, headers=headers, timeout=10)
+        data = res.json()
+        if "data" in data and len(data["data"]) > 0:
+            chat_models = [
+                m["id"] for m in data["data"] 
+                if "whisper" not in m["id"] and "guard" not in m["id"]
+            ]
+            for pref in ["llama-3.3-70b", "llama3.1", "qwen", "llama"]:
+                for m_id in chat_models:
+                    if pref in m_id.lower():
+                        return m_id
+            return chat_models[0]
+    except Exception:
+        pass
+    return "llama-3.3-70b-versatile"
+
+# Fake web server for Render port check
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -28,7 +47,7 @@ def run_fake_server():
 
 threading.Thread(target=run_fake_server, daemon=True).start()
 
-# Database Setup
+# Database setup
 conn = sqlite3.connect("bot_users.db", check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute("""
@@ -102,12 +121,14 @@ async def handle_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_photo(photo=img_url, caption="Kaisi lagi meri pic? Tumhare liye hi click ki hai... 😉")
         return
 
+    active_model = get_working_groq_model()
+
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
     payload = {
-        "model": MODEL_NAME,
+        "model": active_model,
         "messages": [
             {
                 "role": "system",
@@ -124,7 +145,7 @@ async def handle_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
 
     try:
-        response = requests.post(GROQ_BASE_URL, headers=headers, json=payload, timeout=20)
+        response = requests.post(GROQ_CHAT_URL, headers=headers, json=payload, timeout=20)
         res_json = response.json()
         if "choices" in res_json:
             reply = res_json["choices"][0]["message"]["content"]
@@ -134,7 +155,7 @@ async def handle_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update_user_msg(user_id)
         await update.message.reply_text(reply)
     except Exception as e:
-        await update.message.reply_text(f"Jaan, error: {str(e)[:40]}")
+        await update.message.reply_text(f"Jaan, thoda net issue hai: {str(e)[:40]}")
 
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
@@ -144,4 +165,5 @@ if __name__ == "__main__":
     print("Bot live ho gaya hai...")
     app.run_polling()
 
-
+        
+        
